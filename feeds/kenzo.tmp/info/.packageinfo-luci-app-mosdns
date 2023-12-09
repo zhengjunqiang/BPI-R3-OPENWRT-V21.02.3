@@ -3,8 +3,8 @@ Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:lu
 
 Package: luci-app-mosdns
 Submenu: 3. Applications
-Version: 1.4
-Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread +mosdns-neo +jsonfilter +bash +luci-compat +v2ray-geoip +v2ray-geosite
+Version: 1.5.17
+Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread +mosdns +jsonfilter +luci-compat +curl +v2ray-geoip +v2ray-geosite +v2dat
 Conflicts: 
 Menu-Depends: 
 Provides: 

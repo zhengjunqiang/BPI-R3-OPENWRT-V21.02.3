@@ -38,7 +38,7 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_CSI_CTRL = 0xc2,
 	MTK_NL80211_VENDOR_SUBCMD_RFEATURE_CTRL = 0xc3,
 	MTK_NL80211_VENDOR_SUBCMD_WIRELESS_CTRL = 0xc4,
-	MTK_NL80211_VENDOR_SUBCMD_HEMU_CTRL = 0xc5,
+	MTK_NL80211_VENDOR_SUBCMD_MU_CTRL = 0xc5,
 	MTK_NL80211_VENDOR_SUBCMD_PHY_CAPA_CTRL = 0xc6,
 };
 
@@ -52,6 +52,7 @@ enum mtk_vendor_attr_csi_ctrl {
 	MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2,
 	MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR,
 	MTK_VENDOR_ATTR_CSI_CTRL_INTERVAL,
+	MTK_VENDOR_ATTR_CSI_CTRL_STA_INTERVAL,
 
 	MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM,
 
@@ -74,6 +75,7 @@ enum mtk_vendor_attr_csi_data {
 	MTK_VENDOR_ATTR_CSI_DATA_BW,
 	MTK_VENDOR_ATTR_CSI_DATA_CH_IDX,
 	MTK_VENDOR_ATTR_CSI_DATA_TA,
+	MTK_VENDOR_ATTR_CSI_DATA_NUM,
 	MTK_VENDOR_ATTR_CSI_DATA_I,
 	MTK_VENDOR_ATTR_CSI_DATA_Q,
 	MTK_VENDOR_ATTR_CSI_DATA_INFO,
@@ -84,7 +86,7 @@ enum mtk_vendor_attr_csi_data {
 	MTK_VENDOR_ATTR_CSI_DATA_TX_ANT,
 	MTK_VENDOR_ATTR_CSI_DATA_RX_ANT,
 	MTK_VENDOR_ATTR_CSI_DATA_MODE,
-	MTK_VENDOR_ATTR_CSI_DATA_H_IDX,
+	MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO,
 
 	/* keep last */
 	NUM_MTK_VENDOR_ATTRS_CSI_DATA,
@@ -140,6 +142,7 @@ enum mtk_vendor_attr_wireless_ctrl {
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMPDU,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT,
+	MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA,
 
 	/* keep last */
 	NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL,
@@ -147,15 +150,15 @@ enum mtk_vendor_attr_wireless_ctrl {
 		NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL - 1
 };
 
-enum mtk_vendor_attr_hemu_ctrl {
-	MTK_VENDOR_ATTR_HEMU_CTRL_UNSPEC,
+enum mtk_vendor_attr_mu_ctrl {
+	MTK_VENDOR_ATTR_MU_CTRL_UNSPEC,
 
-	MTK_VENDOR_ATTR_HEMU_CTRL_ONOFF,
+	MTK_VENDOR_ATTR_MU_CTRL_ONOFF,
 
 	/* keep last */
-	NUM_MTK_VENDOR_ATTRS_HEMU_CTRL,
-	MTK_VENDOR_ATTR_HEMU_CTRL_MAX =
-		NUM_MTK_VENDOR_ATTRS_HEMU_CTRL - 1
+	NUM_MTK_VENDOR_ATTRS_MU_CTRL,
+	MTK_VENDOR_ATTR_MU_CTRL_MAX =
+		NUM_MTK_VENDOR_ATTRS_MU_CTRL - 1
 };
 
 enum mtk_vendor_attr_rfeature_ctrl {
@@ -198,23 +201,33 @@ enum mtk_vendor_attr_phy_capa_dump {
 		NUM_MTK_VENDOR_ATTRS_PHY_CAPA_DUMP - 1
 };
 
-#define CSI_MAX_COUNT 256
+#define CSI_BW20_DATA_COUNT	64
+#define CSI_BW40_DATA_COUNT	128
+#define CSI_BW80_DATA_COUNT	256
+#define CSI_BW160_DATA_COUNT	512
 #define ETH_ALEN 6
 
 struct csi_data {
-	s16 data_i[CSI_MAX_COUNT];
-	s16 data_q[CSI_MAX_COUNT];
+	u8 ch_bw;
+	u16 data_num;
+	s16 data_i[CSI_BW160_DATA_COUNT];
+	s16 data_q[CSI_BW160_DATA_COUNT];
+	u8 band;
 	s8 rssi;
 	u8 snr;
 	u32 ts;
 	u8 data_bw;
 	u8 pri_ch_idx;
 	u8 ta[ETH_ALEN];
-	u32 info;
+	u32 ext_info;
 	u8 rx_mode;
-	u32 h_idx;
+	u32 chain_info;
 	u16 tx_idx;
 	u16 rx_idx;
+	u32 segment_num;
+	u8 remain_last;
+	u16 pkt_sn;
+	u8 tr_stream;
 };
 
 struct amnt_data {
@@ -235,7 +248,7 @@ int mt76_amnt_dump(int idx, int argc, char **argv);
 int mt76_ap_rfeatures_set(int idx, int argc, char **argv);
 int mt76_ap_wireless_set(int idx, int argc, char **argv);
 
-int mt76_hemu_onoff_set(int idx, int argc, char **argv);
+int mt76_mu_onoff_set(int idx, int argc, char **argv);
 
 int mt76_phy_capa_dump(int idx, int argc, char **argv);
 #endif

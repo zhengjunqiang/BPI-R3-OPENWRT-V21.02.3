@@ -235,18 +235,24 @@ int mii_mgr_cl45_read_indirect(unsigned int port_num, unsigned int dev,
 	mii.reg_num = 13;
 	mii.val_in = dev;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	method = RAETH_MII_WRITE;
 	mii.phy_id = port_num;
 	mii.reg_num = 14;
 	mii.val_in = reg;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	method = RAETH_MII_WRITE;
 	mii.phy_id = port_num;
 	mii.reg_num = 13;
 	mii.val_in = (0x6000 | dev);
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	usleep(1000);
 
@@ -254,6 +260,8 @@ int mii_mgr_cl45_read_indirect(unsigned int port_num, unsigned int dev,
 	mii.phy_id = port_num;
 	mii.reg_num = 14;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	close(sk);
 	*value = mii.val_out;
@@ -283,18 +291,24 @@ int mii_mgr_cl45_write_indirect(unsigned int port_num, unsigned int dev,
 	mii.reg_num = 13;
 	mii.val_in = dev;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	method = RAETH_MII_WRITE;
 	mii.phy_id = port_num;
 	mii.reg_num = 14;
 	mii.val_in = reg;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	method = RAETH_MII_WRITE;
 	mii.phy_id = port_num;
 	mii.reg_num = 13;
 	mii.val_in = (0x6000 | dev);
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	usleep(1000);
 
@@ -303,6 +317,8 @@ int mii_mgr_cl45_write_indirect(unsigned int port_num, unsigned int dev,
 	mii.reg_num = 14;
 	mii.val_in = value;
 	ret = ioctl(sk, method, &ifr);
+	if (ret < 0)
+		printf("ioctl failed with error %d\n", ret);
 
 	close(sk);
 
@@ -413,7 +429,7 @@ out:
 int mii_mgr_cl45_read_ioctl(unsigned int port_num, unsigned int dev,
 			    unsigned int reg, unsigned int *value)
 {
-	if (chip_name == 0x7531)
+	if (chip_name == 0x7531 || chip_name == 0x7988)
 		return mii_mgr_cl45_read(port_num, dev, reg, value);
 	else if (chip_name == 0x7530)
 		return mii_mgr_cl45_read_indirect(port_num, dev, reg, value);
@@ -424,7 +440,7 @@ int mii_mgr_cl45_read_ioctl(unsigned int port_num, unsigned int dev,
 int mii_mgr_cl45_write_ioctl(unsigned int port_num, unsigned int dev,
 			     unsigned int reg, unsigned int value)
 {
-	if (chip_name == 0x7531)
+	if (chip_name == 0x7531 || chip_name == 0x7988)
 		return mii_mgr_cl45_write(port_num, dev, reg, value);
 	else if (chip_name == 0x7530)
 		return mii_mgr_cl45_write_indirect(port_num, dev, reg, value);

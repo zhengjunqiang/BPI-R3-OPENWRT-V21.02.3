@@ -1,28 +1,34 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Copyright (C) 2021 ImmortalWrt.org
+# Copyright (C) 2023 ImmortalWrt.org
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=hysteria
-PKG_VERSION:=1.0.5
-PKG_RELEASE:=$(AUTORELEASE)
+PKG_VERSION:=2.2.2
+PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://codeload.github.com/HyNetwork/hysteria/tar.gz/v$(PKG_VERSION)?
-PKG_HASH:=ee2c765fb7e483a7c211624a62f07b6992a763f2bccbd91b3bf81bd2e82ffe63
+PKG_SOURCE_URL:=https://codeload.github.com/apernet/hysteria/tar.gz/app/v$(PKG_VERSION)?
+PKG_HASH:=b4088f9ea4cf1299a1c372b39a088063e57d9dde61dfdf2a3ca7f04b89bc9536
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-app-v$(PKG_VERSION)
 
 PKG_LICENSE:=MIT
-PKG_LICENSE_FILE:=LICENSE
+PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
 
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
+PKG_BUILD_FLAGS:=no-mips16
 
-GO_PKG:=github.com/tobyxdd/hysteria
-GO_PKG_BUILD_PKG:=$(GO_PKG)/cmd
-GO_PKG_LDFLAGS_X:=main.appVersion=$(PKG_VERSION)
+GO_PKG:=github.com/apernet/hysteria
+GO_PKG_BUILD_PKG:=$(GO_PKG)/app
+GO_PKG_LDFLAGS_X = \
+	$(GO_PKG)/app/cmd.appVersion=v$(PKG_VERSION) \
+	$(GO_PKG)/app/cmd.appType=release \
+	$(GO_PKG)/app/cmd.appPlatform=$(GO_OS) \
+	$(GO_PKG)/app/cmd.appArch=$(GO_ARCH)
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
@@ -45,8 +51,8 @@ endef
 define Package/hysteria/install
 	$(call GoPackage/Package/Install/Bin,$(PKG_INSTALL_DIR))
 
-	$(INSTALL_DIR) $(1)/usr/bin/
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/cmd $(1)/usr/bin/hysteria
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/app $(1)/usr/bin/hysteria
 endef
 
 $(eval $(call GoBinPackage,hysteria))

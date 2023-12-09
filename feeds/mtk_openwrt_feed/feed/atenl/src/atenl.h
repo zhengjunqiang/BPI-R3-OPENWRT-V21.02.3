@@ -17,11 +17,19 @@
 #include "util.h"
 #include "debug.h"
 
-#define BRIDGE_NAME	"br-lan"
-#define ETH_P_RACFG	0x2880
+#define BRIDGE_NAME_OPENWRT	"br-lan"
+#define BRIDGE_NAME_RDKB	"brlan0"
+#define ETH_P_RACFG		0x2880
 #define RACFG_PKT_MAX_SIZE	1600
-#define RACFG_HLEN	12
-#define RACFG_MAGIC_NO	0x18142880
+#define RACFG_HLEN		12
+#define RACFG_MAGIC_NO		0x18142880
+#define PRE_CAL_INFO		16
+#define DPD_INFO_CH_SHIFT	30
+#define DPD_INFO_2G_SHIFT	20
+#define DPD_INFO_5G_SHIFT	10
+#define DPD_INFO_6G_SHIFT	0
+#define DPD_INFO_MASK		GENMASK(9, 0)
+#define MT_EE_CAL_UNIT		1024
 
 #define RACFG_CMD_TYPE_MASK	GENMASK(14, 0)
 #define RACFG_CMD_TYPE_ETHREQ	BIT(3)
@@ -79,18 +87,23 @@ struct atenl {
 	u8 cur_band;
 
 	u8 mac_addr[ETH_ALEN];
+	char *bridge_name;
 	bool unicast;
 	int sock_eth;
 
 	const char *mtd_part;
 	u32 mtd_offset;
+	u8 band_idx;
 	u8 *eeprom_data;
 	int eeprom_fd;
 	u16 eeprom_size;
+	u32 eeprom_prek_offs;
+
+	u8 *cal;
+	u32 cal_info[5];
 
 	bool cmd_mode;
 
-	bool ibf_cal;
 	/* intermediate data */
 	u8 ibf_mcs;
 	u8 ibf_ant;
@@ -220,6 +233,9 @@ enum atenl_phy_type {
 	ATENL_PHY_TYPE_HE_EXT_SU,
 	ATENL_PHY_TYPE_HE_TB,
 	ATENL_PHY_TYPE_HE_MU,
+	ATENL_PHY_TYPE_EHT_SU = 13,
+	ATENL_PHY_TYPE_EHT_TRIG,
+	ATENL_PHY_TYPE_EHT_MU,
 };
 
 enum atenl_e2p_mode {
@@ -254,7 +270,7 @@ enum {
 	MT_EE_BAND_SEL_DUAL,
 };
 
-/* for mt7916/mt7986 */
+/* for mt7916/mt7981/mt7986 */
 enum {
 	MT_EE_BAND_SEL_2G,
 	MT_EE_BAND_SEL_5G,
@@ -262,8 +278,20 @@ enum {
 	MT_EE_BAND_SEL_5G_6G,
 };
 
+/* for mt7996 */
+enum {
+	MT_EE_EAGLE_BAND_SEL_DEFAULT,
+	MT_EE_EAGLE_BAND_SEL_2GHZ,
+	MT_EE_EAGLE_BAND_SEL_5GHZ,
+	MT_EE_EAGLE_BAND_SEL_6GHZ,
+	MT_EE_EAGLE_BAND_SEL_5GHZ_6GHZ,
+};
+
 #define MT_EE_WIFI_CONF				0x190
 #define MT_EE_WIFI_CONF0_BAND_SEL		GENMASK(7, 6)
+#define MT_EE_WIFI_EAGLE_CONF0_BAND_SEL		GENMASK(2, 0)
+#define MT_EE_WIFI_EAGLE_CONF1_BAND_SEL		GENMASK(5, 3)
+#define MT_EE_WIFI_EAGLE_CONF2_BAND_SEL		GENMASK(2, 0)
 
 enum {
 	MT7976_ONE_ADIE_DBDC		= 0x7,
@@ -281,8 +309,9 @@ enum {
 	TEST_CBW_5MHZ,
 	TEST_CBW_160MHZ,
 	TEST_CBW_8080MHZ,
+	TEST_CBW_320MHZ = 12,
 
-	TEST_CBW_MAX = TEST_CBW_8080MHZ - 1,
+	TEST_CBW_MAX = TEST_CBW_320MHZ,
 };
 
 struct atenl_rx_info_hdr {
@@ -351,6 +380,16 @@ enum atenl_ibf_action {
 	TXBF_ACT_IBF_PHASE_E2P_UPDATE = 16,
 };
 
+enum prek_ops {
+	PREK_SYNC_ALL = 1,
+	PREK_SYNC_GROUP,
+	PREK_SYNC_DPD_2G,
+	PREK_SYNC_DPD_5G,
+	PREK_SYNC_DPD_6G,
+	PREK_CLEAN_GROUP,
+	PREK_CLEAN_DPD,
+};
+
 static inline bool is_mt7915(struct atenl *an)
 {
 	return an->chip_id == 0x7915;
@@ -361,9 +400,29 @@ static inline bool is_mt7916(struct atenl *an)
 	return (an->chip_id == 0x7916) || (an->chip_id == 0x7906);
 }
 
+static inline bool is_mt7981(struct atenl *an)
+{
+	return an->chip_id == 0x7981;
+}
+
 static inline bool is_mt7986(struct atenl *an)
 {
 	return an->chip_id == 0x7986;
+}
+
+static inline bool is_mt7996(struct atenl *an)
+{
+	return an->chip_id == 0x7990;
+}
+
+static inline bool is_mt7992(struct atenl *an)
+{
+	return an->chip_id == 0x7992;
+}
+
+static inline bool is_connac3(struct atenl *an)
+{
+	return is_mt7996(an) || is_mt7992(an);
 }
 
 int atenl_eth_init(struct atenl *an);
@@ -379,9 +438,12 @@ int atenl_nl_update_buffer_mode(struct atenl *an);
 int atenl_nl_set_state(struct atenl *an, u8 band,
 		       enum mt76_testmode_state state);
 int atenl_nl_set_aid(struct atenl *an, u8 band, u8 aid);
+int atenl_nl_precal_sync_from_driver(struct atenl *an, enum prek_ops ops);
+void atenl_get_ibf_cal_result(struct atenl *an);
 int atenl_eeprom_init(struct atenl *an, u8 phy_idx);
 void atenl_eeprom_close(struct atenl *an);
 int atenl_eeprom_write_mtd(struct atenl *an);
+int atenl_eeprom_update_precal(struct atenl *an, int write_offs, int size);
 int atenl_eeprom_read_from_driver(struct atenl *an, u32 offset, int len);
 void atenl_eeprom_cmd_handler(struct atenl *an, u8 phy_idx, char *cmd);
 u16 atenl_get_center_channel(u8 bw, u8 ch_band, u16 ctrl_ch);

@@ -6,62 +6,41 @@
 
 #include "atenl.h"
 
-#define EEPROM_PART_SIZE 20480
+#define EEPROM_PART_SIZE 0xFF000
 char *eeprom_file;
 
-static FILE *mtd_open(const char *mtd)
-{
-	char line[128], name[64];
-	FILE *fp;
-	int i;
-
-	fp = fopen("/proc/mtd", "r");
-	if (!fp)
-		return NULL;
-
-	snprintf(name, sizeof(name), "\"%s\"", mtd);
-	while (fgets(line, sizeof(line), fp)) {
-		if (!sscanf(line, "mtd%d:", &i) || !strstr(line, name))
-			continue;
-
-		snprintf(line, sizeof(line), "/dev/mtd%d", i);
-		fclose(fp);
-		return fopen(line, "r");
-	}
-	fclose(fp);
-
-	return NULL;
-}
-
 static int
-atenl_flash_create_file(struct atenl *an)
+atenl_create_file(struct atenl *an, bool flash_mode)
 {
-#define READ_LEN_LIMIT	20000
-	char buf[1024];
-	ssize_t len, limit = 0;
-	FILE *f;
-	int fd, ret;
+	char fname[64], buf[1024];
+	ssize_t w, len, max_len, total_len = 0;
+	int fd_ori, fd, ret;
 
-	f = mtd_open(an->mtd_part);
-	if (!f) {
-		atenl_err("Failed to open MTD device\n");
-		return -1;
+	/* reserve space for pre-cal data in flash mode */
+	if (flash_mode) {
+		atenl_dbg("%s: init eeprom with flash / binfile mode\n", __func__);
+		max_len = EEPROM_PART_SIZE;
+	} else {
+		atenl_dbg("%s: init eeprom with efuse / default bin mode\n", __func__);
+		max_len = 0x1e00;
 	}
+
+	snprintf(fname, sizeof(fname),
+		 "/sys/kernel/debug/ieee80211/phy%d/mt76/eeprom",
+		 get_band_val(an, 0, phy_idx));
+	fd_ori = open(fname, O_RDONLY);
+	if (fd_ori < 0)
+		return -1;
 
 	fd = open(eeprom_file, O_RDWR | O_CREAT | O_EXCL, 00644);
 	if (fd < 0)
 		goto out;
 
-	while ((len = fread(buf, 1, sizeof(buf), f)) > 0) {
-		ssize_t w;
-
+	while ((len = read(fd_ori, buf, sizeof(buf))) > 0) {
 retry:
 		w = write(fd, buf, len);
 		if (w > 0) {
-			limit += len;
-
-			if (limit >= READ_LEN_LIMIT)
-				break;
+			total_len += len;
 			continue;
 		}
 
@@ -75,52 +54,26 @@ retry:
 		goto out;
 	}
 
-	ret = lseek(fd, 0, SEEK_SET);
-	if (ret) {
-		fclose(f);
-		close(fd);
-		return ret;
-	}
-
-out:
-	fclose(f);
-	return fd;
-}
-
-static int
-atenl_efuse_create_file(struct atenl *an)
-{
-	char fname[64], buf[1024];
-	ssize_t len;
-	int fd_ori, fd, ret;
-
-	snprintf(fname, sizeof(fname),
-		"/sys/kernel/debug/ieee80211/phy%d/mt76/eeprom", get_band_val(an, 0, phy_idx));
-	fd_ori = open(fname, O_RDONLY);
-	if (fd_ori < 0)
-		return -1;
-
-	fd = open(eeprom_file, O_RDWR | O_CREAT | O_EXCL, 00644);
-	if (fd < 0)
-		goto out;
-
-	while ((len = read(fd_ori, buf, sizeof(buf))) > 0) {
-		ssize_t w;
-
-retry:
+	/* reserve space for pre-cal data in flash mode */
+	len = sizeof(buf);
+	memset(buf, 0, len);
+	while (total_len < max_len) {
 		w = write(fd, buf, len);
-		if (w > 0)
+
+		if (w > 0) {
+			total_len += len;
 			continue;
+		}
 
-		if (errno == EINTR)
-			goto retry;
-
-		perror("write");
-		unlink(eeprom_file);
-		close(fd);
-		fd = -1;
-		goto out;
+		if (errno != EINTR) {
+			perror("write");
+			unlink(eeprom_file);
+			close(fd);
+			fd = -1;
+			goto out;
+		}
 	}
+
 
 	ret = lseek(fd, 0, SEEK_SET);
 	if (ret) {
@@ -147,17 +100,8 @@ atenl_eeprom_init_file(struct atenl *an, bool flash_mode)
 {
 	int fd;
 
-	if (!atenl_eeprom_file_exists()) {
-		if (flash_mode)
-			atenl_dbg("%s: init eeprom with flash mode\n", __func__);
-		else
-			atenl_dbg("%s: init eeprom with efuse mode\n", __func__);
-
-		if (flash_mode)
-			return atenl_flash_create_file(an);
-
-		return atenl_efuse_create_file(an);
-	}
+	if (!atenl_eeprom_file_exists())
+		return atenl_create_file(an, flash_mode);
 
 	fd = open(eeprom_file, O_RDWR);
 	if (fd < 0)
@@ -173,7 +117,7 @@ atenl_eeprom_init_chip_id(struct atenl *an)
 
 	if (is_mt7915(an)) {
 		an->adie_id = 0x7975;
-	} else if (is_mt7916(an)) {
+	} else if (is_mt7916(an) || is_mt7981(an)) {
 		an->adie_id = 0x7976;
 	} else if (is_mt7986(an)) {
 		bool is_7975 = false;
@@ -203,6 +147,10 @@ atenl_eeprom_init_chip_id(struct atenl *an)
 
 		an->sub_chip_id = sub_id;
 		an->adie_id = is_7975 ? 0x7975 : 0x7976;
+	} else if (is_mt7996(an)) {
+		/* TODO: parse info if required */
+	} else if (is_mt7992(an)) {
+		/* TODO: parse info if required */
 	}
 }
 
@@ -212,12 +160,19 @@ atenl_eeprom_init_max_size(struct atenl *an)
 	switch (an->chip_id) {
 	case 0x7915:
 		an->eeprom_size = 3584;
+		an->eeprom_prek_offs = 0x62;
 		break;
 	case 0x7906:
 	case 0x7916:
+	case 0x7981:
 	case 0x7986:
 		an->eeprom_size = 4096;
+		an->eeprom_prek_offs = 0x19a;
 		break;
+	case 0x7990:
+	case 0x7992:
+		an->eeprom_size = 7680;
+		an->eeprom_prek_offs = 0x1a5;
 	default:
 		break;
 	}
@@ -226,6 +181,7 @@ atenl_eeprom_init_max_size(struct atenl *an)
 static void
 atenl_eeprom_init_band_cap(struct atenl *an)
 {
+#define EAGLE_BAND_SEL(index)	MT_EE_WIFI_EAGLE_CONF##index##_BAND_SEL
 	u8 *eeprom = an->eeprom_data;
 
 	if (is_mt7915(an)) {
@@ -254,7 +210,7 @@ atenl_eeprom_init_band_cap(struct atenl *an)
 			anb->valid = true;
 			anb->cap = BAND_TYPE_5G;
 		}
-	} else if (is_mt7916(an) || is_mt7986(an)) {
+	} else if (is_mt7916(an) || is_mt7981(an) || is_mt7986(an)) {
 		struct atenl_band *anb;
 		u8 val, band_sel;
 		int i;
@@ -282,25 +238,104 @@ atenl_eeprom_init_band_cap(struct atenl *an)
 				break;
 			}
 		}
+	} else if (is_mt7996(an)) {
+		struct atenl_band *anb;
+		u8 val, band_sel;
+		u8 band_sel_mask[3] = {EAGLE_BAND_SEL(0), EAGLE_BAND_SEL(1),
+				       EAGLE_BAND_SEL(2)};
+		int i;
+
+		for (i = 0; i < 3; i++) {
+			val = eeprom[MT_EE_WIFI_CONF + i];
+			band_sel = FIELD_GET(band_sel_mask[i], val);
+			anb = &an->anb[i];
+
+			anb->valid = true;
+			switch (band_sel) {
+			case MT_EE_EAGLE_BAND_SEL_2GHZ:
+				anb->cap = BAND_TYPE_2G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_5GHZ:
+				anb->cap = BAND_TYPE_5G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_6GHZ:
+				anb->cap = BAND_TYPE_6G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_5GHZ_6GHZ:
+				anb->cap = BAND_TYPE_5G_6G;
+				break;
+			default:
+				break;
+			}
+		}
+	} else if (is_mt7992(an)) {
+		struct atenl_band *anb;
+		u8 val, band_sel;
+		u8 band_sel_mask[2] = {EAGLE_BAND_SEL(0), EAGLE_BAND_SEL(1)};
+		int i;
+
+		for (i = 0; i < 2; i++) {
+			val = eeprom[MT_EE_WIFI_CONF + i];
+			band_sel = FIELD_GET(band_sel_mask[i], val);
+			anb = &an->anb[i];
+
+			anb->valid = true;
+			switch (band_sel) {
+			case MT_EE_EAGLE_BAND_SEL_2GHZ:
+				anb->cap = BAND_TYPE_2G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_5GHZ:
+				anb->cap = BAND_TYPE_5G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_6GHZ:
+				anb->cap = BAND_TYPE_6G;
+				break;
+			case MT_EE_EAGLE_BAND_SEL_5GHZ_6GHZ:
+				anb->cap = BAND_TYPE_5G_6G;
+				break;
+			default:
+				break;
+			}
+		}
 	}
 }
 
 static void
 atenl_eeprom_init_antenna_cap(struct atenl *an)
 {
-	if (is_mt7915(an)) {
+	switch (an->chip_id) {
+	case 0x7915:
 		if (an->anb[0].cap == BAND_TYPE_2G_5G)
 			an->anb[0].chainmask = 0xf;
 		else {
 			an->anb[0].chainmask = 0x3;
 			an->anb[1].chainmask = 0xc;
 		}
-	} else if (is_mt7916(an)) {
+		break;
+	case 0x7906:
+	case 0x7916:
 		an->anb[0].chainmask = 0x3;
 		an->anb[1].chainmask = 0x3;
-	} else if (is_mt7986(an)) {
+		break;
+	case 0x7981:
+		an->anb[0].chainmask = 0x3;
+		an->anb[1].chainmask = 0x7;
+		break;
+	case 0x7986:
 		an->anb[0].chainmask = 0xf;
 		an->anb[1].chainmask = 0xf;
+		break;
+	case 0x7990:
+		an->anb[0].chainmask = 0xf;
+		an->anb[1].chainmask = 0xf;
+		an->anb[2].chainmask = 0xf;
+		break;
+	case 0x7992:
+		an->anb[0].chainmask = 0xf;
+		an->anb[1].chainmask = 0xf;
+		break;
+	default:
+		break;
 	}
 }
 
@@ -309,20 +344,25 @@ int atenl_eeprom_init(struct atenl *an, u8 phy_idx)
 	bool flash_mode;
 	int eeprom_fd;
 	char buf[30];
+	u8 main_phy_idx = phy_idx;
 
 	set_band_val(an, 0, phy_idx, phy_idx);
-	snprintf(buf, sizeof(buf), "/tmp/atenl-eeprom-phy%u", phy_idx);
-	eeprom_file = strdup(buf);
-
 	atenl_nl_check_mtd(an);
 	flash_mode = an->mtd_part != NULL;
+
+	// Get the first main phy index for this chip
+	if (flash_mode)
+		main_phy_idx -= an->band_idx;
+
+	snprintf(buf, sizeof(buf), "/tmp/atenl-eeprom-phy%u", main_phy_idx);
+	eeprom_file = strdup(buf);
 
 	eeprom_fd = atenl_eeprom_init_file(an, flash_mode);
 	if (eeprom_fd < 0)
 		return -1;
 
 	an->eeprom_data = mmap(NULL, EEPROM_PART_SIZE, PROT_READ | PROT_WRITE,
-			       MAP_SHARED, eeprom_fd, an->mtd_offset);
+			       MAP_SHARED, eeprom_fd, 0);
 	if (!an->eeprom_data) {
 		perror("mmap");
 		close(eeprom_fd);
@@ -337,6 +377,9 @@ int atenl_eeprom_init(struct atenl *an, u8 phy_idx)
 
 	if (get_band_val(an, 1, valid))
 		set_band_val(an, 1, phy_idx, phy_idx + 1);
+
+	if (get_band_val(an, 2, valid))
+		set_band_val(an, 2, phy_idx, phy_idx + 2);
 
 	return 0;
 }
@@ -355,31 +398,53 @@ void atenl_eeprom_close(struct atenl *an)
 	free(eeprom_file);
 }
 
-int atenl_eeprom_write_mtd(struct atenl *an)
+int atenl_eeprom_update_precal(struct atenl *an, int write_offs, int size)
 {
-	bool flash_mode = an->mtd_part != NULL;
-	pid_t pid;
+	u32 offs = an->eeprom_prek_offs;
+	u8 cal_indicator, *eeprom, *pre_cal;
 
-	if (!flash_mode)
+	if (!an->cal && !an->cal_info)
 		return 0;
 
-	pid = fork();
-	if (pid < 0) {
-		perror("Fork");
-		return EXIT_FAILURE;
-	} else if (pid == 0) {
-		char *part = strdup(an->mtd_part);
-		char *cmd[] = {"mtd", "write", eeprom_file, part, NULL};
-		int ret;
+	eeprom = an->eeprom_data;
+	pre_cal = eeprom + an->eeprom_size;
+	cal_indicator = an->cal_info[4];
 
-		ret = execvp("mtd", cmd);
-		if (ret < 0) {
-			atenl_err("%s: exec error\n", __func__);
-			exit(0);
-		}
-	} else {
-		wait(&pid);
-	}
+	memcpy(eeprom + offs, &cal_indicator, sizeof(u8));
+	memcpy(pre_cal, an->cal_info, PRE_CAL_INFO);
+	pre_cal += (PRE_CAL_INFO + write_offs);
+
+	if (an->cal)
+		memcpy(pre_cal, an->cal, size);
+	else
+		memset(pre_cal, 0, size);
+
+	return 0;
+}
+
+int atenl_eeprom_write_mtd(struct atenl *an)
+{
+#define TMP_FILE	"/tmp/tmp_eeprom.bin"
+	pid_t pid;
+	u32 size = an->eeprom_size;
+	u32 *precal_info = an->eeprom_data + an->eeprom_size;
+	u32 precal_size = precal_info[0] + precal_info[1];
+	char cmd[100];
+
+	if (an->mtd_part == NULL || !(~an->mtd_offset))
+		return 0;
+
+	if (precal_size)
+		size += PRE_CAL_INFO + precal_size;
+
+	sprintf(cmd, "dd if=%s of=%s bs=1 count=%d", eeprom_file, TMP_FILE, size);
+	system(cmd);
+
+	sprintf(cmd, "mtd -p %d write %s %s", an->mtd_offset, TMP_FILE, an->mtd_part);
+	system(cmd);
+
+	sprintf(cmd, "rm %s", TMP_FILE);
+	system(cmd);
 
 	return 0;
 }
@@ -434,12 +499,9 @@ atenl_eeprom_sync_to_driver(struct atenl *an)
 
 void atenl_eeprom_cmd_handler(struct atenl *an, u8 phy_idx, char *cmd)
 {
-	bool flash_mode;
-
 	an->cmd_mode = true;
 
 	atenl_eeprom_init(an, phy_idx);
-	flash_mode = an->mtd_part != NULL;
 
 	if (!strncmp(cmd, "sync eeprom all", 15)) {
 		atenl_eeprom_write_mtd(an);
@@ -456,7 +518,11 @@ void atenl_eeprom_cmd_handler(struct atenl *an, u8 phy_idx, char *cmd)
 			unlink(eeprom_file);
 		} else if (!strncmp(s, "file", 4)) {
 			atenl_info("%s\n", eeprom_file);
-			atenl_info("Flash mode: %d\n", flash_mode);
+			if (an->mtd_part != NULL)
+				atenl_info("%s mode\n",
+					   ~an->mtd_offset == 0 ? "Binfile" : "Flash");
+			else
+				atenl_info("Efuse / Default bin mode\n");
 		} else if (!strncmp(s, "set", 3)) {
 			u32 offset, val;
 
@@ -482,10 +548,10 @@ void atenl_eeprom_cmd_handler(struct atenl *an, u8 phy_idx, char *cmd)
 
 			if (!strncmp(s, "flash", 5)) {
 				atenl_eeprom_write_mtd(an);
-            } else if (!strncmp(s, "to efuse", 8)) {
-                atenl_eeprom_sync_to_driver(an);
-                atenl_nl_write_efuse_all(an);
-            }
+			} else if (!strncmp(s, "to efuse", 8)) {
+				atenl_eeprom_sync_to_driver(an);
+				atenl_nl_write_efuse_all(an);
+			}
 		} else if (!strncmp(s, "read", 4)) {
 			u32 offset;
 
@@ -500,9 +566,32 @@ void atenl_eeprom_cmd_handler(struct atenl *an, u8 phy_idx, char *cmd)
 
 			atenl_info("val = 0x%x (%u)\n", an->eeprom_data[offset],
 							an->eeprom_data[offset]);
+		} else if (!strncmp(s, "precal", 6)) {
+			s = strchr(s, ' ');
+			if (!s)
+				return;
+			s++;
+
+			if (!strncmp(s, "sync group", 10)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_SYNC_GROUP);
+			} else if (!strncmp(s, "sync dpd 2g", 11)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_SYNC_DPD_2G);
+			} else if (!strncmp(s, "sync dpd 5g", 11)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_SYNC_DPD_5G);
+			} else if (!strncmp(s, "sync dpd 6g", 11)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_SYNC_DPD_6G);
+			} else if (!strncmp(s, "group clean", 11)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_CLEAN_GROUP);
+			} else if (!strncmp(s, "dpd clean", 9)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_CLEAN_DPD);
+			} else if (!strncmp(s, "sync", 4)) {
+				atenl_nl_precal_sync_from_driver(an, PREK_SYNC_ALL);
+			}
+		} else if (!strncmp(s, "ibf sync", 8)) {
+			atenl_get_ibf_cal_result(an);
 		} else {
-            atenl_err("Unknown eeprom command: %s\n", cmd);
-        }
+			atenl_err("Unknown eeprom command: %s\n", cmd);
+		}
 	} else {
 		atenl_err("Unknown command: %s\n", cmd);
 	}

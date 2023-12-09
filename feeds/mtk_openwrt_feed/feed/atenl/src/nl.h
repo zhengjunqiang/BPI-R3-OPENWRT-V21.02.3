@@ -14,11 +14,13 @@
  *
  * @MT76_TM_ATTR_MTD_PART: mtd partition used for eeprom data (string)
  * @MT76_TM_ATTR_MTD_OFFSET: offset of eeprom data within the partition (u32)
+ * @MT76_TM_ATTR_BAND_IDX: band idx of the chip (u8)
  *
+ * @MT76_TM_ATTR_SKU_EN: config txpower sku is enabled or disabled in testmode (u8)
  * @MT76_TM_ATTR_TX_COUNT: configured number of frames to send when setting
  *	state to MT76_TM_STATE_TX_FRAMES (u32)
  * @MT76_TM_ATTR_TX_PENDING: pending frames during MT76_TM_STATE_TX_FRAMES (u32)
- * @MT76_TM_ATTR_TX_LENGTH: packet tx msdu length (u32)
+ * @MT76_TM_ATTR_TX_LENGTH: packet tx mpdu length (u32)
  * @MT76_TM_ATTR_TX_RATE_MODE: packet tx mode (u8, see &enum mt76_testmode_tx_mode)
  * @MT76_TM_ATTR_TX_RATE_NSS: packet tx number of spatial streams (u8)
  * @MT76_TM_ATTR_TX_RATE_IDX: packet tx rate/MCS index (u8)
@@ -35,11 +37,46 @@
  *
  * @MT76_TM_ATTR_STATS: statistics (nested, see &enum mt76_testmode_stats_attr)
  *
+ * @MT76_TM_ATTR_PRECAL: Pre-cal data (u8)
+ * @MT76_TM_ATTR_PRECAL_INFO: group size, dpd size, dpd_info, transmit size,
+ *                            eeprom cal indicator (u32),
+ *                            dpd_info = [dpd_per_chan_size, chan_num_2g,
+ *                                        chan_num_5g, chan_num_6g]
  * @MT76_TM_ATTR_TX_SPE_IDX: tx spatial extension index (u8)
  *
  * @MT76_TM_ATTR_TX_DUTY_CYCLE: packet tx duty cycle (u8)
  * @MT76_TM_ATTR_TX_IPG: tx inter-packet gap, in unit of us (u32)
  * @MT76_TM_ATTR_TX_TIME: packet transmission time, in unit of us (u32)
+ *
+ * @MT76_TM_ATTR_DRV_DATA: driver specific netlink attrs (nested)
+ *
+ * @MT76_TM_ATTR_MAC_ADDRS: array of nested MAC addresses (nested)
+ *
+ * @MT76_TM_ATTR_EEPROM_ACTION: eeprom setting actions
+ *				(u8, see &enum mt76_testmode_eeprom_action)
+ * @MT76_TM_ATTR_EEPROM_OFFSET: offset of eeprom data block for writing (u32)
+ * @MT76_TM_ATTR_EEPROM_VAL: values for writing into a 16-byte data block
+ *			     (nested, u8 attrs)
+ *
+ * @MT76_TM_ATTR_CFG: config testmode rf feature
+ *		      (nested, see &mt76_testmode_cfg)
+ * @MT76_TM_ATTR_TXBF_ACT: txbf setting actions (u8)
+ * @MT76_TM_ATTR_TXBF_PARAM: txbf parameters (nested)
+ *
+ * @MT76_TM_ATTR_OFF_CH_SCAN_CH: config the channel of background chain (ZWDFS)
+ *				 (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH: config the center channel of
+ *					background chain (ZWDFS) (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_BW: config the bandwidth of
+ *				 background chain (ZWDFS) (u8)
+ * @MT76_TM_ATTR_OFF_CH_SCAN_PATH: config the tx path of
+ *				   background chain (ZWDFS) (u8)
+ *
+ * @MT76_TM_ATTR_IPI_THRESHOLD: config the IPI index you want to read (u8)
+ * @MT76_TM_ATTR_IPI_PERIOD: config the time period for reading
+ *			     the histogram of specific IPI index (u8)
+ * @MT76_TM_ATTR_IPI_ANTENNA_INDEX: config the antenna index for reading
+ *				    the histogram of specific IPI index (u8)
  *
  */
 enum mt76_testmode_attr {
@@ -50,7 +87,9 @@ enum mt76_testmode_attr {
 
 	MT76_TM_ATTR_MTD_PART,
 	MT76_TM_ATTR_MTD_OFFSET,
+	MT76_TM_ATTR_BAND_IDX,
 
+	MT76_TM_ATTR_SKU_EN,
 	MT76_TM_ATTR_TX_COUNT,
 	MT76_TM_ATTR_TX_LENGTH,
 	MT76_TM_ATTR_TX_RATE_MODE,
@@ -68,6 +107,8 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_FREQ_OFFSET,
 
 	MT76_TM_ATTR_STATS,
+	MT76_TM_ATTR_PRECAL,
+	MT76_TM_ATTR_PRECAL_INFO,
 
 	MT76_TM_ATTR_TX_SPE_IDX,
 
@@ -94,6 +135,10 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH,
 	MT76_TM_ATTR_OFF_CH_SCAN_BW,
 	MT76_TM_ATTR_OFF_CH_SCAN_PATH,
+
+	MT76_TM_ATTR_IPI_THRESHOLD,
+	MT76_TM_ATTR_IPI_PERIOD,
+	MT76_TM_ATTR_IPI_ANTENNA_INDEX,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -136,6 +181,7 @@ enum mt76_testmode_stats_attr {
  *
  * @MT76_TM_RX_ATTR_FREQ_OFFSET: frequency offset (s32)
  * @MT76_TM_RX_ATTR_RCPI: received channel power indicator (array, u8)
+ * @MT76_TM_RX_ATTR_RSSI: received signal strength indicator (array, s8)
  * @MT76_TM_RX_ATTR_IB_RSSI: internal inband RSSI (array, s8)
  * @MT76_TM_RX_ATTR_WB_RSSI: internal wideband RSSI (array, s8)
  * @MT76_TM_RX_ATTR_SNR: signal-to-noise ratio (u8)
@@ -145,6 +191,7 @@ enum mt76_testmode_rx_attr {
 
 	MT76_TM_RX_ATTR_FREQ_OFFSET,
 	MT76_TM_RX_ATTR_RCPI,
+	MT76_TM_RX_ATTR_RSSI,
 	MT76_TM_RX_ATTR_IB_RSSI,
 	MT76_TM_RX_ATTR_WB_RSSI,
 	MT76_TM_RX_ATTR_SNR,
@@ -198,6 +245,9 @@ enum mt76_testmode_tx_mode {
 	MT76_TM_TX_MODE_HE_EXT_SU,
 	MT76_TM_TX_MODE_HE_TB,
 	MT76_TM_TX_MODE_HE_MU,
+	MT76_TM_TX_MODE_EHT_SU,
+	MT76_TM_TX_MODE_EHT_TRIG,
+	MT76_TM_TX_MODE_EHT_MU,
 
 	/* keep last */
 	NUM_MT76_TM_TX_MODES,
@@ -223,15 +273,26 @@ enum mt76_testmode_eeprom_action {
 };
 
 enum mt76_testmode_txbf_act {
+	MT76_TM_TXBF_ACT_GOLDEN_INIT,
 	MT76_TM_TXBF_ACT_INIT,
+	MT76_TM_TX_EBF_ACT_GOLDEN_INIT,
+	MT76_TM_TX_EBF_ACT_INIT,
 	MT76_TM_TXBF_ACT_UPDATE_CH,
 	MT76_TM_TXBF_ACT_PHASE_COMP,
 	MT76_TM_TXBF_ACT_TX_PREP,
 	MT76_TM_TXBF_ACT_IBF_PROF_UPDATE,
 	MT76_TM_TXBF_ACT_EBF_PROF_UPDATE,
+	MT76_TM_TXBF_ACT_APPLY_TX,
 	MT76_TM_TXBF_ACT_PHASE_CAL,
 	MT76_TM_TXBF_ACT_PROF_UPDATE_ALL,
+	MT76_TM_TXBF_ACT_PROF_UPDATE_ALL_CMD,
 	MT76_TM_TXBF_ACT_E2P_UPDATE,
+	MT76_TM_TXBF_ACT_TRIGGER_SOUNDING,
+	MT76_TM_TXBF_ACT_STOP_SOUNDING,
+	MT76_TM_TXBF_ACT_PROFILE_TAG_READ,
+	MT76_TM_TXBF_ACT_PROFILE_TAG_WRITE,
+	MT76_TM_TXBF_ACT_PROFILE_TAG_INVALID,
+	MT76_TM_TXBF_ACT_STA_REC_READ,
 
 	/* keep last */
 	NUM_MT76_TM_TXBF_ACT,

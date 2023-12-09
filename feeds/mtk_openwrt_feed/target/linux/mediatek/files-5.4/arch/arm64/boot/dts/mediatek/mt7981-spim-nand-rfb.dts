@@ -53,7 +53,7 @@
 				reg = <0x0100000 0x0080000>;
 			};
 
-			partition@180000 {
+			factory: partition@180000 {
 				label = "Factory";
 				reg = <0x180000 0x0200000>;
 			};
@@ -71,21 +71,34 @@
 	};
 
 	sound_wm8960 {
-		compatible = "mediatek,mt79xx-wm8960-machine";
-		mediatek,platform = <&afe>;
+		compatible = "mediatek,mt7986-wm8960-sound";
 		audio-routing = "Headphone", "HP_L",
 				"Headphone", "HP_R",
 				"LINPUT1", "AMIC",
 				"RINPUT1", "AMIC";
-		mediatek,audio-codec = <&wm8960>;
+
 		status = "disabled";
+
+		platform {
+			sound-dai = <&afe>;
+		};
+
+		codec {
+			sound-dai = <&wm8960>;
+		};
 	};
 
 	sound_si3218x {
-		compatible = "mediatek,mt79xx-si3218x-machine";
-		mediatek,platform = <&afe>;
-		mediatek,ext-codec = <&proslic_spi>;
+		compatible = "mediatek,mt7986-si3218x-sound";
 		status = "disabled";
+
+		platform {
+			sound-dai = <&afe>;
+		};
+
+		codec {
+			sound-dai = <&proslic_spi>;
+		};
 	};
 };
 
@@ -211,8 +224,8 @@
 		compatible = "spi-nand";
 		reg = <0>;
 		spi-max-frequency = <52000000>;
-		spi-tx-buswidth = <4>;
-		spi-rx-buswidth = <4>;
+		spi-tx-bus-width = <4>;
+		spi-rx-bus-width = <4>;
 	};
 };
 
@@ -232,6 +245,13 @@
 		reset_gpio = <&pio 15 0>;
 		ig,enable-spi = <1>;     /* 1: Enable, 0: Disable */
 	};
+};
+
+&wbsys {
+	mediatek,mtd-eeprom = <&factory 0x0000>;
+	status = "okay";
+	pinctrl-names = "dbdc";
+	pinctrl-0 = <&wf_dbdc_pins>;
 };
 
 &pio {
@@ -310,6 +330,21 @@
                         groups = "uart2_1";
                 };
         };
+
+	wf_dbdc_pins: wf_dbdc-pins {
+		mux {
+			function = "eth";
+			groups = "wf0_mode1";
+		};
+		conf {
+			pins = "WF_HB1", "WF_HB2", "WF_HB3", "WF_HB4",
+			       "WF_HB0", "WF_HB0_B", "WF_HB5", "WF_HB6",
+			       "WF_HB7", "WF_HB8", "WF_HB9", "WF_HB10",
+			       "WF_TOP_CLK", "WF_TOP_DATA", "WF_XO_REQ",
+			       "WF_CBA_RESETB", "WF_DIG_RESETB";
+			drive-strength = <MTK_DRIVE_4mA>;
+		};
+	};
 };
 
 &xhci {

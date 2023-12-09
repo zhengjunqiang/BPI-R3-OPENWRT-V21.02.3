@@ -3,8 +3,8 @@ Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:lu
 
 Package: luci-app-dockerman
 Submenu: 3. Applications
-Version: v0.5.25
-Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread @(aarch64||arm||x86_64) +luci-compat +luci-lib-docker +luci-lib-ip +docker +dockerd +ttyd
+Version: v0.5.26
+Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread @(aarch64||arm||x86_64) +luci-compat +luci-lib-docker +luci-lib-ip +docker +dockerd +cgroupfs-mount +cgroupfs-mount +ttyd
 Conflicts: 
 Menu-Depends: 
 Provides: 

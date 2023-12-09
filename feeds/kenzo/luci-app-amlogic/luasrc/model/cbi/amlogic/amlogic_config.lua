@@ -15,7 +15,7 @@ end
 b = Map("amlogic")
 b.title = translate("Plugin Settings")
 local des_content = translate("You can customize the github.com download repository of OpenWrt files and kernels in [Online Download Update].")
-local des_content = des_content .. "<br />" .. translate("Tips: The amlogic SoC (E.g: s905d) and mainline version of the kernel (E.g: 5.10) will automatically match the current openwrt firmware.")
+local des_content = des_content .. "<br />" .. translate("Tip: The same files as the current OpenWrt system's BOARD (such as rock5b) and kernel (such as 5.10) will be downloaded.")
 b.description = des_content
 
 o = b:section(NamedSection, "config", "amlogic")
@@ -24,9 +24,8 @@ o.anonymouse = true
 --1.Set OpenWrt Firmware Repository
 mydevice = o:option(DummyValue, "mydevice", translate("Current Device:"))
 mydevice.description = translate("If the current device shows (Unknown device), please report to github.")
-mydevice_platfrom = trim(luci.sys.exec("cat /etc/flippy-openwrt-release 2>/dev/null | grep PLATFORM | awk -F'=' '{print $2}' | grep -oE '(amlogic|rockchip|allwinner)'")) or "Unknown PLATFORM"
-mydevice_name = trim(luci.sys.exec("cat /proc/device-tree/model | tr -d \'\\000\'")) or "Unknown device"
-mydevice.default = mydevice_name .. " (" .. mydevice_platfrom .. ")"
+mydevice_platfrom = trim(luci.sys.exec("cat /etc/flippy-openwrt-release 2>/dev/null | grep PLATFORM | awk -F'=' '{print $2}' | grep -oE '(amlogic|rockchip|allwinner|qemu)'")) or "Unknown"
+mydevice.default = "PLATFORM: " .. mydevice_platfrom
 mydevice.rmempty = false
 
 --2.Set OpenWrt Firmware Repository
@@ -54,7 +53,7 @@ firmware_suffix.rmempty = false
 --5.Set OpenWrt Kernel DownLoad Path
 kernel_path = o:option(Value, "amlogic_kernel_path", translate("Download path of OpenWrt kernel:"))
 kernel_path.description = translate("Set the download path of the kernel in the github.com repository in [Online Download Update].")
-kernel_path.default = "opt/kernel"
+kernel_path.default = "https://github.com/breakings/OpenWrt"
 kernel_path.rmempty = false
 
 --6.Set kernel version branch
@@ -63,10 +62,8 @@ kernel_branch.description = translate("Set the version branch of the openwrt fir
 kernel_branch:value("5.4", translate("5.4"))
 kernel_branch:value("5.10", translate("5.10"))
 kernel_branch:value("5.15", translate("5.15"))
-kernel_branch:value("5.16", translate("5.16"))
-kernel_branch:value("5.17", translate("5.17"))
-kernel_branch:value("5.18", translate("5.18"))
-local default_kernel_branch = luci.sys.exec("ls /lib/modules/ 2>/dev/null | grep -oE '^[1-9].[0-9]{1,3}'")
+kernel_branch:value("6.1", translate("6.1"))
+local default_kernel_branch = luci.sys.exec("uname -r | grep -oE '^[1-9].[0-9]{1,3}'")
 kernel_branch.default = trim(default_kernel_branch)
 kernel_branch.rmempty = false
 

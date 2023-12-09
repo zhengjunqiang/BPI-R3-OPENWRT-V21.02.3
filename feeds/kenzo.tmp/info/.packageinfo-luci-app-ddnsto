@@ -3,8 +3,8 @@ Build-Depends: lua/host luci-base/host LUCI_CSSTIDY:csstidy/host LUCI_SRCDIET:lu
 
 Package: luci-app-ddnsto
 Submenu: 3. Applications
-Version: 3.0.0
-Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread +ddnsto
+Version: 3.0.4
+Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread +ddnsto +block-mount
 Conflicts: 
 Menu-Depends: 
 Provides: 

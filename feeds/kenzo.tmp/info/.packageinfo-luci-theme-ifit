@@ -2,7 +2,7 @@ Source-Makefile: feeds/kenzo/luci-theme-ifit/Makefile
 
 Package: luci-theme-ifit
 Submenu: 4. Themes
-Version: 1.6-1
+Version: 1.5.2-1
 Depends: +libc +USE_GLIBC:librt +USE_GLIBC:libpthread 
 Conflicts: 
 Menu-Depends: 
@@ -10,11 +10,11 @@ Provides:
 Section: luci
 Category: LuCI
 Repository: base
-Title: Ifit by kenzo
+Title: Ifit Theme
 Maintainer: 
 Source: 
 Type: ipkg
-Description: Ifit by kenzo
+Description: Ifit Theme
 https://github.com/kenzok8/luci-theme-ifit
 
 @@

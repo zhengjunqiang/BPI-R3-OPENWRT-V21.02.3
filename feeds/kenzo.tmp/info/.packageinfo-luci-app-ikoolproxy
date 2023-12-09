@@ -11,11 +11,11 @@ Provides:
 Section: luci
 Category: LuCI
 Repository: base
-Title: LuCI support for ikoolproxy
+Title: LuCI support for koolproxy
 Maintainer: OpenWrt LuCI community
 Source: 
 Type: ipkg
-Description: LuCI support for ikoolproxy
+Description: LuCI support for koolproxy
 https://github.com/openwrt/luci
 OpenWrt LuCI community
 @@

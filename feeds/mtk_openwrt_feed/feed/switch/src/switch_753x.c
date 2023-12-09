@@ -240,7 +240,10 @@ static void parse_reg_cmd(int argc, char *argv[], int len)
 
 static int get_chip_name()
 {
-	unsigned int temp;
+	int temp;
+	FILE *fp = NULL;
+	char buff[255];
+
 	/*judge 7530*/
 	reg_read((0x7ffc), &temp);
 	temp = temp >> 16;
@@ -251,6 +254,18 @@ static int get_chip_name()
 	temp = temp >> 16;
 	if (temp == 0x7531)
 		return temp;
+
+	/*judge jaguar embedded switch*/
+	fp = fopen("/proc/device-tree/compatible", "r");
+	if (fp != NULL) {
+		temp = -1;
+		if (fgets(buff, 255, (FILE *)fp) && strstr(buff, "mt7988"))
+			temp = 0x7988;
+
+		fclose(fp);
+		return temp;
+	}
+
 	return -1;
 }
 
@@ -258,9 +273,9 @@ static int phy_operate(int argc, char *argv[])
 {
 	unsigned int port_num;
 	unsigned int dev_num;
-	unsigned int value;
+	unsigned int value, cl_value;
 	unsigned int reg;
-	int ret = 0;
+	int ret = 0, cl_ret = 0;
 	char op;
 
 	if (strncmp(argv[2], "cl22", 4) && strncmp(argv[2], "cl45", 4))
@@ -295,11 +310,21 @@ static int phy_operate(int argc, char *argv[])
 			if (argc == 7) {
 				port_num = strtoul(argv[argc-3], NULL, 0);
 				ret = mii_mgr_write(port_num, reg, value);
+				cl_ret = mii_mgr_read(port_num, reg, &cl_value);
+				if (cl_ret < 0)
+					printf(" Phy read reg fail\n");
+				else
+					printf(" Phy read reg=0x%x, value=0x%x\n", reg, cl_value);
 			}
 			else if (argc == 8) {
 				dev_num = strtoul(argv[argc-3], NULL, 0);
 				port_num = strtoul(argv[argc-4], NULL, 0);
 				ret = mii_mgr_c45_write(port_num, dev_num, reg, value);
+				cl_ret = mii_mgr_c45_read(port_num, dev_num, reg, &cl_value);
+				if (cl_ret < 0)
+					printf(" Phy read reg fail\n");
+				else
+					printf(" Phy read reg=0x%x, value=0x%x\n", reg, cl_value);
 			}
 			else
 				usage(argv[0]);
@@ -320,30 +345,29 @@ int main(int argc, char *argv[])
 	attres->dev_id = -1;
 	attres->port_num = -1;
 	attres->phy_dev = -1;
-	nl_init_flag = false;
+	nl_init_flag = true;
 
-	err = switch_ioctl_init();
+	/* dsa netlink family might not be enabled. Try gsw netlink family. */
+	err = mt753x_netlink_init(MT753X_DSA_GENL_NAME);
 	if (!err)
 		chip_name = get_chip_name();
 
-	/* dsa netlink family might not be enabled. Try gsw netlink family. */
-	if (err < 0 || chip_name < 0) {
-		nl_init_flag = true;
-
-		err = mt753x_netlink_init(MT753X_DSA_GENL_NAME);
-		if (!err)
-			chip_name = get_chip_name();
-	}
-
-	if (err < 0 || chip_name < 0) {
+	if (err < 0) {
 		err = mt753x_netlink_init(MT753X_GENL_NAME);
 		if (!err)
 			chip_name = get_chip_name();
-
-		if (chip_name < 0) {
-			printf("no chip unsupport or chip id is invalid!\n");
-			exit_free();
-			exit(0);
+	}
+	
+	if (err < 0) {
+		err = switch_ioctl_init();
+		if (!err) {
+			nl_init_flag = false;
+			chip_name = get_chip_name();
+			if (chip_name < 0) {
+				printf("no chip unsupport or chip id is invalid!\n");
+				exit_free();
+				exit(0);
+			}
 		}
 	}
 

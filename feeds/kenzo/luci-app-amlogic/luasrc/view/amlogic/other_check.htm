@@ -5,7 +5,7 @@
 	<table width="100%" class="NewsTdHeight">
 		<tr><td width="100%" colspan="2">
 			<p align="center">
-				<%:The OpenWrt and kernel will be downloaded and updated according to the options filled in [Plugin Settings].%> <span id="_openwrt_mainline_version"></span>
+				<%:Update plugins first, then update the kernel or firmware. More options can be configured in [Plugin Settings].%> <span id="_openwrt_mainline_version"></span>
 			</p>
 		</td></tr>
 		<tr><td width="35%" align="right"><input type="button" class="cbi-button cbi-button-reload" value="<%:Only update Amlogic Service%>" onclick="return b_check_plugin(this)"/></td><td  width="65%" align="left"><span id="_current_plugin_version"><%:Collecting data...%></span>　<span id="_check_plugin"></span></td></tr>
@@ -27,7 +27,7 @@
 			function(x,status)
 			{
 				if ( x && x.status == 200 ) {
-					if(status.rule_update_status=="1")
+					if(status.rule_update_status!="0")
 					{
 						btn.value = '<%:Update Failed%>';
 					}
@@ -52,7 +52,7 @@
 
 		XHR.get('<%=luci.dispatcher.build_url("admin", "system", "amlogic", "start_amlogic_kernel")%>', null, function(x, status) {
 				if ( x && x.status == 200 ) {
-					if(status.rule_kernel_status=="1")
+					if(status.rule_kernel_status!="0")
 					{
 						btn.value = '<%:Update Failed%>';
 					}
@@ -77,7 +77,7 @@
 
 		XHR.get('<%=luci.dispatcher.build_url("admin", "system", "amlogic", "start_amlogic_plugin")%>', null, function(x, status) {
 				if ( x && x.status == 200 ) {
-					if(status.rule_plugin_status=="1")
+					if(status.rule_plugin_status!="0")
 					{
 						btn.value = '<%:Update Failed%>';
 					}
@@ -106,7 +106,7 @@
 			function(x,status)
 			{
 				if ( x && x.status == 200 ) {
-					if(status.check_firmware_status=="1")
+					if(status.check_firmware_status!="0")
 					{
 						btn.value = '<%:Complete system update%>';
 					}
@@ -152,7 +152,7 @@
 			function(x,status)
 			{
 				if ( x && x.status == 200 ) {
-					if(status.check_kernel_status=="1")
+					if(status.check_kernel_status!="0")
 					{
 						btn.value = '<%:Update system kernel only%>';
 					}

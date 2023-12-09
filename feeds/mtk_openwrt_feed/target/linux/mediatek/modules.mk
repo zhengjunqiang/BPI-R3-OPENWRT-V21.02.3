@@ -39,28 +39,33 @@ endef
 
 $(eval $(call KernelPackage,sdhci-mtk))
 
-define KernelPackage/crypto-hw-mtk
-  TITLE:= MediaTek's Crypto Engine module
-  DEPENDS:=@TARGET_mediatek
+define KernelPackage/crypto-eip197
+  TITLE:= EIP-197 Crypto Engine module
+  DEPENDS:=@TARGET_mediatek_mt7988 +eip197-mini-firmware
+  DEFAULT:=y
   KCONFIG:= \
 	CONFIG_CRYPTO_HW=y \
+	CONFIG_CRYPTO_AUTHENC=y \
 	CONFIG_CRYPTO_AES=y \
 	CONFIG_CRYPTO_AEAD=y \
+	CONFIG_CRYPTO_DES=y \
+	CONFIG_CRYPTO_MD5=y \
 	CONFIG_CRYPTO_SHA1=y \
 	CONFIG_CRYPTO_SHA256=y \
 	CONFIG_CRYPTO_SHA512=y \
+	CONFIG_CRYPTO_SHA3=y \
 	CONFIG_CRYPTO_HMAC=y \
-	CONFIG_CRYPTO_DEV_MEDIATEK
-  FILES:=$(LINUX_DIR)/drivers/crypto/mediatek/mtk-crypto.ko
-  AUTOLOAD:=$(call AutoLoad,90,mtk-crypto)
+	CONFIG_CRYPTO_DEV_SAFEXCEL
+  FILES:=$(LINUX_DIR)/drivers/crypto/inside-secure/crypto_safexcel.ko
+  AUTOLOAD:=$(call AutoLoad,90,crypto-safexcel)
   $(call AddDepends/crypto)
 endef
 
-define KernelPackage/crypto-hw-mtk/description
-  MediaTek's EIP97 Cryptographic Engine driver.
+define KernelPackage/crypto-eip197/description
+  EIP-197 Cryptographic Engine driver.
 endef
 
-$(eval $(call KernelPackage,crypto-hw-mtk))
+$(eval $(call KernelPackage,crypto-eip197))
 
 define KernelPackage/sound-soc-mt79xx
   TITLE:=MT79xx SoC sound support
@@ -102,3 +107,38 @@ endef
 
 $(eval $(call KernelPackage,mediatek_hnat))
 
+
+define KernelPackage/aquantia_aqtion
+  SUBMENU:=Network Devices
+  TITLE:=Aquantia AQtion(tm) Ethernet driver module
+  DEPENDS:=@TARGET_mediatek
+  KCONFIG:= \
+	CONFIG_NET_VENDOR_AQUANTIA=y \
+	CONFIG_AQTION
+  FILES:= \
+        $(LINUX_DIR)/drivers/net/ethernet/aquantia/atlantic/atlantic.ko
+endef
+
+define KernelPackage/aquantia_aqtion/description
+  Kernel modules for Aquantia AQtion(tm) Ethernet PCIe card driver
+endef
+
+$(eval $(call KernelPackage,aquantia_aqtion))
+
+define KernelPackage/phy-air_en8811h
+  SUBMENU:=Network Devices
+  TITLE:=Airoha EN8811H PHY driver
+  DEPENDS:=@TARGET_mediatek
+  KCONFIG:= \
+	CONFIG_AIROHA_EN8811H_PHY \
+	CONFIG_AIROHA_EN8811H_PHY_DEBUGFS=y
+  FILES:= \
+	$(LINUX_DIR)/drivers/net/phy/air_en8811h.ko
+  AUTOLOAD:=$(call AutoLoad,20,air_en8811h,1)
+endef
+
+define KernelPackage/phy-air_en8811h/description
+  kernel modules for Airoha EN8811H PHY driver
+endef
+
+$(eval $(call KernelPackage,phy-air_en8811h))

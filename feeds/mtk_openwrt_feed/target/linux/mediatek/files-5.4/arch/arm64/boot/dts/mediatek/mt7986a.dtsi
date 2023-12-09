@@ -124,9 +124,9 @@
 		#size-cells = <2>;
 		ranges;
 
-		/* 192 KiB reserved for ARM Trusted Firmware (BL31) */
+		/* 512 KiB reserved for ARM Trusted Firmware (BL31 + BL32) */
 		secmon_reserved: secmon@43000000 {
-			reg = <0 0x43000000 0 0x30000>;
+			reg = <0 0x43000000 0 0x80000>;
 			no-map;
 		};
 
@@ -179,7 +179,7 @@
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupt-parent = <&gic>;
-		clock-frequency = <13000000>;
+		clock-frequency = <12986200>;
 		interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
 			     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
 			     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
@@ -213,7 +213,7 @@
 	watchdog: watchdog@1001c000 {
 		compatible = "mediatek,mt7986-wdt";
 		reg = <0 0x1001c000 0 0x1000>;
-		interrupts = <GIC_SPI 110 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>;
 		#reset-cells = <1>;
 	};
 
@@ -313,35 +313,48 @@
 			polling-delay = <1000>;
 			thermal-sensors = <&thermal 0>;
 			trips {
+				cpu_trip_crit: crit {
+					temperature = <125000>;
+					hysteresis = <2000>;
+					type = "critical";
+				};
+
 				cpu_trip_hot: hot {
-					temperature = <60000>;
+					temperature = <120000>;
 					hysteresis = <2000>;
 					type = "hot";
 				};
 
-				cpu_trip_active: active {
-					temperature = <40000>;
+				cpu_trip_active_high: active-high {
+					temperature = <115000>;
+					hysteresis = <2000>;
+					type = "active";
+				};
+
+				cpu_trip_active_low: active-low {
+					temperature = <85000>;
 					hysteresis = <2000>;
 					type = "active";
 				};
 
 				cpu_trip_passive: passive {
-					temperature = <20000>;
+					temperature = <40000>;
 					hysteresis = <2000>;
 					type = "passive";
 				};
 			};
+
 			cooling-maps {
-				cpu-hot {
-					/* hot: set fan to cooling level 2 */
+				cpu-active-high {
+					/* active: set fan to cooling level 2 */
 					cooling-device = <&fan 2 2>;
-					trip = <&cpu_trip_hot>;
+					trip = <&cpu_trip_active_high>;
 				};
 
-				cpu-active {
+				cpu-active-low {
 					/* active: set fan to cooling level 1 */
 					cooling-device = <&fan 1 1>;
-					trip = <&cpu_trip_active>;
+					trip = <&cpu_trip_active_low>;
 				};
 
 				cpu-passive {
@@ -462,10 +475,14 @@
         eth: ethernet@15100000 {
                 compatible = "mediatek,mt7986-eth";
                 reg = <0 0x15100000 0 0x80000>;
-                interrupts = <GIC_SPI 196 IRQ_TYPE_LEVEL_HIGH>,
-                             <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>,
-                             <GIC_SPI 198 IRQ_TYPE_LEVEL_HIGH>,
-                             <GIC_SPI 199 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SPI 189 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 190 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 191 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 192 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 196 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 198 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 199 IRQ_TYPE_LEVEL_HIGH>;
                 clocks = <&ethsys CK_ETH_FE_EN>,
                          <&ethsys CK_ETH_GP2_EN>,
                          <&ethsys CK_ETH_GP1_EN>,
@@ -728,7 +745,7 @@
 	};
 
 	afe: audio-controller@11210000 {
-		compatible = "mediatek,mt79xx-audio";
+		compatible = "mediatek,mt7986-afe";
 		reg = <0 0x11210000 0 0x9000>;
 		interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&infracfg_ao CK_INFRA_AUD_BUS_CK>,

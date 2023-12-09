@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
-# Copyright (C) 2021 ImmortalWrt.org
+# Copyright (C) 2021-2023 ImmortalWrt.org
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=v2rayA
-PKG_VERSION:=1.5.8.1
+PKG_VERSION:=2.2.4.3
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://codeload.github.com/v2rayA/v2rayA/tar.gz/v$(PKG_VERSION)?
-PKG_HASH:=822ec4a93933d93aed1bda6f9a3c08915135c0fc33bebe5e69b293cf30fe35c2
+PKG_HASH:=8ebb1790ac57b795a03a13f830d316206040627486bd204158b04917a8c817b7
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)/service
 
 PKG_LICENSE:=AGPL-3.0-only
@@ -20,9 +20,12 @@ PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
 PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
+PKG_BUILD_FLAGS:=no-mips16
 
 GO_PKG:=github.com/v2rayA/v2rayA
-GO_PKG_LDFLAGS_X:=$(GO_PKG)/conf.Version=$(PKG_VERSION)
+GO_PKG_LDFLAGS_X:= \
+	$(GO_PKG)/conf.Version=$(PKG_VERSION) \
+	$(GO_PKG)/core/iptables.TproxyNotSkipBr=true
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
@@ -37,11 +40,7 @@ define Package/v2raya
   SUBMENU:=Web Servers/Proxies
   DEPENDS:=$(GO_ARCH_DEPENDS) \
     +ca-bundle \
-    +iptables-mod-conntrack-extra \
-    +iptables-mod-extra \
-    +iptables-mod-filter \
-    +iptables-mod-tproxy \
-    +kmod-ipt-nat6 \
+    +kmod-nft-tproxy \
     +xray-core
   URL:=https://v2raya.org
 endef
@@ -61,7 +60,7 @@ define Download/v2raya-web
 	URL:=https://codeload.github.com/v2rayA/v2raya-web/tar.gz/v$(PKG_VERSION)?
 	URL_FILE:=$(WEB_FILE)
 	FILE:=$(WEB_FILE)
-	HASH:=b13beac91d75c64af4ca6d7365716968702ce1be3f0c3e94d26e01daa07f223b
+        HASH:=skip
 endef
 
 define Build/Prepare
@@ -69,7 +68,7 @@ define Build/Prepare
 
 	( \
 		mkdir -p $(PKG_BUILD_DIR)/server/router/web ; \
-		gzip -dc $(DL_DIR)/$(WEB_FILE) | $(HOST_TAR) -C $(PKG_BUILD_DIR)/server/router/web $(TAR_OPTIONS) ; \
+		unzip -q -d $(PKG_BUILD_DIR)/server/router/web $(DL_DIR)/$(WEB_FILE) ; \
 	)
 endef
 

@@ -12,6 +12,9 @@ NUM_WIFI_CARD=0
 WIFI_RADIO1=0
 WIFI_RADIO2=0
 WIFI_RADIO3=0
+WED_ENABLE=0
+
+WIFI_MODULE_LIST='mt7915e mt7996e'
 
 get_if_info()
 {
@@ -20,9 +23,9 @@ get_if_info()
 	NET_IF_LIST=`ls /sys/class/net`
 	for vif in $NET_IF_LIST;
 	do
-		if [[ "$vif" == "eth0*" ]] || [[ "$vif" == "eth1" ]] || \
-		[[ "$vif" == "lan*" ]] || [[ "$vif" == "wan*" ]] || \
-		[[ "$vif" == "wlan*" ]]; then
+		if [[ "$vif" == "eth"* ]] ||  \
+		[[ "$vif" == "lan"* ]] || [[ "$vif" == "wan"* ]] || \
+		[[ "$vif" == "wlan"* ]] || [[ "$vif" == "phy"* ]]; then
 			RPS_IF_LIST="$RPS_IF_LIST $vif"
 		fi
 	done;
@@ -38,9 +41,10 @@ get_if_info()
 		if [[ $v == *"wmac"* ]]; then
 			WIFI_RADIO1=1
 		fi
+
 		if [[ $v == *"wbsys"* ]]; then
-                        WIFI_RADIO1=1
-                fi
+			WIFI_RADIO1=1
+		fi
 
 		if [[ $v == *"pci0000"* ]]; then
 			WIFI_RADIO2=1
@@ -51,10 +55,22 @@ get_if_info()
 		fi
 	done;
 
+
+	for v in $WIFI_MODULE_LIST;
+	do
+		if [[ -f "/sys/module/$v/parameters/wed_enable" ]]; then
+			WED_ENABLE_LIST=`cat /sys/module/$v/parameters/wed_enable`
+			dbg2 "wed enable ori info $v $WED_ENABLE_LIST"
+			if [[ $WED_ENABLE_LIST == "Y" ]]; then
+				WED_ENABLE=1
+			fi
+		fi
+	done;
 	dbg2 "NUM_WIFI_CARD = $NUM_WIFI_CARD"
 	dbg2 "platform wifi enable = $WIFI_RADIO1"
 	dbg2 "pcie1 wifi enable = $WIFI_RADIO2"
 	dbg2 "pcie2 wifi enable = $WIFI_RADIO3"
+	dbg2 "WED enable = $WED_ENABLE"
 }
 
 # $1: CPU#
@@ -74,53 +90,166 @@ CPU_RPS_ADD()
 	dbg2 "CPU${1}_RPS=\"\$CPU${1}_RPS $2\""
 }
 
-MT7986()
+MT7988()
 {
 	num_of_wifi=$1
 	DEFAULT_RPS=0
 
 	#Physical IRQ# setting
-	eth0_irq=229
-	eth1_irq=230
-	wifi1_irq=
-	wifi2_irq=
-	wifi3_irq=
-	#AX6000 AX7800
-	if [[ "$WIFI_RADIO1" -eq "1" ]]; then
-		wifi1_irq=245
+	#Ethernet RSS feature enables 4 Rx rings
+	eth_irq_rx0=221
+	eth_irq_rx1=222
+	eth_irq_rx2=223
+	eth_irq_rx3=224
+	eth_irq_tx=229
+	wifi1_irq_pcie0=524288
+	wifi1_irq_pcie1=134742016
+	wifi2_irq_pcie0=
+	wifi2_irq_pcie1=
+
+	if [[ "$WED_ENABLE" -eq "1" ]]; then
+		dbg2 "WED_ENABLE ON irq/iptable setting"
+		#TCP Binding
+		iptables -D FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		#UDP Binding
+		iptables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+
+	else
+		dbg2 "WED_ENABLE OFF irq/iptable seting"
 	fi
-	#AX7800
-	if [[ "$WIFI_RADIO2" -eq "1" ]]; then
-		wifi2_irq=246
-	fi
-	#AX7800
-	if [[ "$WIFI_RADIO3" -eq "1" ]]; then
-		wifi3_irq=247
-	fi
+
+	for vif in $NET_IF_LIST;
+	do
+		if [[ "$vif" == "wlan"* ]] || [[ "$vif" == "phy"* ]]; then
+			WIFI_IF_LIST="$WIFI_IF_LIST $vif"
+		fi
+	done;
+	dbg2 "$WIFI_IF_LIST = $WIFI_IF_LIST"
 	# Please update the CPU binding in each cases.
 	# CPU#_AFFINITY="add binding irq number here"
 	# CPU#_RPS="add binding interface name here"
 	if [ "$num_of_wifi" = "0" ]; then
-		CPU0_AFFINITY="$eth0_irq"
-		CPU1_AFFINITY="$eth1_irq"
-		CPU2_AFFINITY=""
-		CPU3_AFFINITY=""
+		CPU0_AFFINITY="$eth_irq_rx0 $eth_irq_tx"
+		CPU1_AFFINITY="$eth_irq_rx1"
+		CPU2_AFFINITY="$eth_irq_rx2"
+		CPU3_AFFINITY="$eth_irq_rx3"
 
 		CPU0_RPS="$RPS_IF_LIST"
 		CPU1_RPS="$RPS_IF_LIST"
 		CPU2_RPS="$RPS_IF_LIST"
 		CPU3_RPS="$RPS_IF_LIST"
 	else
-		#we bound all wifi card to cpu1 and bound eth to cpu0
-		CPU0_AFFINITY="$eth0_irq"
-		CPU1_AFFINITY="$eth1_irq"
-		CPU2_AFFINITY="$wifi2_irq $wifi3_irq"
-		CPU3_AFFINITY="$wifi1_irq"
+		#we bound all wifi card to cpu0 and bound eth to cpu
+		CPU0_AFFINITY=""
+		CPU1_AFFINITY=""
+		CPU2_AFFINITY="$eth_irq_rx0 $eth_irq_rx1 $eth_irq_tx"
+		CPU3_AFFINITY="$eth_irq_rx2 $eth_irq_rx3"
 
-		CPU0_RPS="$RPS_IF_LIST"
-		CPU1_RPS="$RPS_IF_LIST"
-		CPU2_RPS="$RPS_IF_LIST"
-		CPU3_RPS="$RPS_IF_LIST"
+		CPU0_RPS="$WIFI_IF_LIST"
+		CPU1_RPS="$WIFI_IF_LIST"
+		CPU2_RPS=""
+		CPU3_RPS=""
+	fi
+	dbg2 "CPU0_AFFINITY = $CPU0_AFFINITY"
+	dbg2 "CPU1_AFFINITY = $CPU1_AFFINITY"
+	dbg2 "CPU2_AFFINITY = $CPU2_AFFINITY"
+	dbg2 "CPU3_AFFINITY = $CPU3_AFFINITY"
+}
+
+MT7986()
+{
+	num_of_wifi=$1
+	DEFAULT_RPS=0
+
+	#Physical IRQ# setting
+	#Ethernet RSS feature enables 4 Rx rings
+	eth_irq_rx0=221
+	eth_irq_rx1=222
+	eth_irq_rx2=223
+	eth_irq_rx3=224
+	eth_irq_tx=229
+	wifi1_irq=
+	wifi2_irq=
+	wifi3_irq=
+
+	if [[ "$WED_ENABLE" -eq "1" ]]; then
+		dbg2 "WED_ENABLE ON irq/iptable setting"
+		#TCP Binding
+		iptables -D FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p tcp -m conntrack --ctstate RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		#UDP Binding
+		iptables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+
+		#AX6000 AX7800 - SOC
+		if [[ "$WIFI_RADIO1" -eq "1" ]]; then
+			wifi1_irq=238
+		fi
+		#AX7800 - PCIE0
+		if [[ "$WIFI_RADIO2" -eq "1" ]]; then
+			wifi2_irq=237
+		fi
+		#AX7800 - PCIE1
+		#if [[ "$WIFI_RADIO3" -eq "1" ]]; then
+		#	wifi3_irq=239
+		#fi
+	else
+		dbg2 "WED_ENABLE OFF irq/iptable seting"
+		#AX6000 AX7800 - SOC
+		if [[ "$WIFI_RADIO1" -eq "1" ]]; then
+			wifi1_irq=245
+		fi
+		#AX7800 - PCIE0
+		if [[ "$WIFI_RADIO2" -eq "1" ]]; then
+			wifi2_irq=246
+		fi
+		#AX7800 - PCIE1
+		#if [[ "$WIFI_RADIO3" -eq "1" ]]; then
+		#	wifi3_irq=247
+		#fi
+	fi
+
+	for vif in $NET_IF_LIST;
+	do
+		if [[ "$vif" == "wlan"* ]] || [[ "$vif" == "phy"* ]]; then
+			WIFI_IF_LIST="$WIFI_IF_LIST $vif"
+		fi
+	done;
+	dbg2 "$WIFI_IF_LIST = $WIFI_IF_LIST"
+	# Please update the CPU binding in each cases.
+	# CPU#_AFFINITY="add binding irq number here"
+	# CPU#_RPS="add binding interface name here"
+	if [ "$num_of_wifi" = "0" ]; then
+		CPU0_AFFINITY="$eth_irq_rx0"
+		CPU1_AFFINITY="$eth_irq_rx1 $eth_irq_tx"
+		CPU2_AFFINITY="$eth_irq_rx2"
+		CPU3_AFFINITY="$eth_irq_rx3"
+
+		CPU0_RPS=""
+		CPU1_RPS=""
+		CPU2_RPS=""
+		CPU3_RPS=""
+	else
+		#we bound all wifi card to cpu1 and bound eth to cpu0
+		CPU0_AFFINITY="$eth_irq_rx0"
+		CPU1_AFFINITY="$eth_irq_rx1 $eth_irq_tx"
+		CPU2_AFFINITY="$eth_irq_rx2 $wifi2_irq $wifi3_irq"
+		CPU3_AFFINITY="$eth_irq_rx3 $wifi1_irq"
+
+		CPU0_RPS="$WIFI_IF_LIST"
+		CPU1_RPS="$WIFI_IF_LIST"
+		CPU2_RPS="$WIFI_IF_LIST"
+		CPU3_RPS="$WIFI_IF_LIST"
 	fi
 	dbg2 "CPU0_AFFINITY = $CPU0_AFFINITY"
 	dbg2 "CPU1_AFFINITY = $CPU1_AFFINITY"
@@ -134,28 +263,52 @@ MT7981()
 	DEFAULT_RPS=0
 
 	#Physical IRQ# setting
-	eth0_irq=229
-	eth1_irq=230
+	eth_irq_rx=221
+	eth_irq_tx=229
 	wifi1_irq=
 	wifi2_irq=
 	wifi3_irq=
+
 	#AX3000
-	if [[ "$WIFI_RADIO1" -eq "1" ]]; then
-		wifi1_irq=245
+	if [[ "$WED_ENABLE" -eq "1" ]]; then
+		dbg2 "WED_ENABLE ON irq/iptable setting"
+		#TCP Binding
+		iptables -D FORWARD -p tcp -m conntrack --ctstate	\
+				RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p tcp -m conntrack --ctstate	\
+				RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p tcp -m conntrack --ctstate	\
+				RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p tcp -m conntrack --ctstate	\
+				RELATED,ESTABLISHED -j FLOWOFFLOAD --hw
+		#UDP Binding
+		iptables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		iptables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -D FORWARD -p udp -j FLOWOFFLOAD --hw
+		ip6tables -I FORWARD -p udp -j FLOWOFFLOAD --hw
+
+		if [[ "$WIFI_RADIO1" -eq "1" ]]; then
+			wifi1_irq=237
+		fi
+	else
+		if [[ "$WIFI_RADIO1" -eq "1" ]]; then
+			wifi1_irq=245
+		fi
 	fi
+
 	# Please update the CPU binding in each cases.
 	# CPU#_AFFINITY="add binding irq number here"
 	# CPU#_RPS="add binding interface name here"
 	if [ "$num_of_wifi" = "0" ]; then
-		CPU0_AFFINITY="$eth0_irq"
-		CPU1_AFFINITY="$eth1_irq"
+		CPU0_AFFINITY="$eth_irq_rx"
+		CPU1_AFFINITY="$eth_irq_tx"
 
 		CPU0_RPS="$RPS_IF_LIST"
 		CPU1_RPS="$RPS_IF_LIST"
 	else
 		#we bound all wifi card to cpu0 and bound eth to cpu1
 		CPU0_AFFINITY="$wifi1_irq $wifi2_irq $wifi3_irq"
-		CPU1_AFFINITY="$eth0_irq $eth1_irq"
+		CPU1_AFFINITY="$eth_irq_rx $eth_irq_tx"
 
 		CPU0_RPS="$RPS_IF_LIST"
 		CPU1_RPS="$RPS_IF_LIST"
@@ -215,13 +368,16 @@ setup_model()
 	board=$(board_name)
 	num_of_wifi=$NUM_WIFI_CARD
 
-	if [[ $board == "*7986*" ]]; then
+	if [[ $board == *"7988"* ]]; then
+		dbg "setup_model: MT7988 NUM_WIFI_CARD=$num_of_wifi"
+		MT7988 $num_of_wifi
+	elif [[ $board == *"7986"* ]]; then
 		dbg "setup_model: MT7986 NUM_WIFI_CARD=$num_of_wifi"
 		MT7986 $num_of_wifi
-	elif [[ $board == "*7981*" ]]; then
+	elif [[ $board == *"7981"* ]]; then
 		dbg "setup_model: MT7981 NUM_WIFI_CARD=$num_of_wifi"
 		MT7981 $num_of_wifi
-	elif [[ $board == "*7622*" ]]; then
+	elif [[ $board == *"7622"* ]]; then
 		dbg "setup_model: MT7622 NUM_WIFI_CARD=$num_of_wifi"
 		MT7622 $num_of_wifi
 	fi

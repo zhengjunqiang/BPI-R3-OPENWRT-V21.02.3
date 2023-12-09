@@ -67,6 +67,12 @@ o:value("domain")
 o:value("ipcidr")
 o:value("classical")
 
+o = s:option(ListValue, "format", translate("Rule Format")..translate("(TUN&Meta Core)"))
+o.rmempty = true
+o.description = translate("Choose The Rule File Format, For More Info:").." ".."<a href='javascript:void(0)' onclick='javascript:return winOpen(\"https://github.com/Dreamacro/clash/wiki/Premium%3A-Rule-Providers\")'>https://github.com/Dreamacro/clash/wiki/</a>"
+o:value("yaml")
+o:value("text")
+
 o = s:option(ListValue, "path", translate("Rule Providers Path"))
 o.description = translate("Update Your Rule Providers File From Config Luci Page")
 local p,h={}
@@ -106,12 +112,26 @@ o:value("1", translate("Extended Match"))
 o = s:option(ListValue, "group", translate("Set Proxy Group"))
 o.description = font_red..bold_on..translate("The Added Proxy Groups Must Exist Except 'DIRECT' & 'REJECT'")..bold_off..font_off
 o.rmempty = true
+local groupnames,filename
+filename = m.uci:get(openclash, "config", "config_path")
+if filename then
+   groupnames = sys.exec(string.format('ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "YAML.load_file(\'%s\')[\'proxy-groups\'].each do |i| puts i[\'name\']+\'##\' end" 2>/dev/null',filename))
+   if groupnames then
+      for groupname in string.gmatch(groupnames, "([^'##\n']+)##") do
+         if groupname ~= nil and groupname ~= "" then
+            o:value(groupname)
+         end
+      end
+   end
+end
+
 m.uci:foreach("openclash", "groups",
-		function(s)
-			if s.name ~= "" and s.name ~= nil then
-			   o:value(s.name)
-			end
-		end)
+   function(s)
+      if s.name ~= "" and s.name ~= nil then
+         o:value(s.name)
+      end
+   end)
+
 o:value("DIRECT")
 o:value("REJECT")
 
@@ -137,4 +157,5 @@ o.write = function()
    luci.http.redirect(m.redirect)
 end
 
+m:append(Template("openclash/toolbar_show"))
 return m

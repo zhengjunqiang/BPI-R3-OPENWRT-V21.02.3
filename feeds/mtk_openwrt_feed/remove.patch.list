@@ -1,3 +1,4 @@
+target/linux/generic/backport-5.4/430-v6.3-ubi-Fix-failure-attaching-when-vid_hdr-offset-equals.patch
 target/linux/generic/backport-5.4/760-net-ethernet-mediatek-Integrate-GDM-PSE-setup-operat.patch
 target/linux/generic/backport-5.4/761-net-ethernet-mediatek-Refine-the-timing-of-GDM-PSE-s.patch
 target/linux/generic/backport-5.4/762-net-ethernet-mediatek-Enable-GDM-GDMA_DROP_ALL-mode.patch
@@ -26,3 +27,5 @@ target/linux/generic/pending-5.15/701-10-net-ethernet-mtk_eth_soc-support-creati
 target/linux/generic/pending-5.15/702-net-ethernet-mtk_eth_soc-enable-threaded-NAPI.patch
 target/linux/mediatek/patches-5.15/510-net-mediatek-add-flow-offload-for-mt7623.patch
 target/linux/mediatek/patches-5.15/703-v5.17-net-ethernet-mtk_eth_soc-implement-Clause-45-MDIO-ac.patch
+target/linux/generic/backport-5.4/711-v6.3-bgmac-fix-initial-chip-reset-to-support-BCM5358.patch
+target/linux/mediatek/patches-5.4/999-1700-macsec-revert-async-support.patch
